@@ -1,3 +1,3 @@
-module github.com/matthieutran/event-driven-server
+module github.com/matthieutran/servetcp
 
 go 1.18
