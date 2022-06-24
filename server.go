@@ -53,7 +53,7 @@ func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 	defer wg.Done()
 
 	s.wg.Add(1)
-	s.ln, err = net.Listen("tcp", ":"+string(rune(s.port)))
+	s.ln, err = net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		return
 	}
