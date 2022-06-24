@@ -11,34 +11,44 @@ type IPacket interface {
 	Size() int
 }
 
+type Connection interface {
+	Read([]byte) (int, error)
+	Write([]byte) (int, error)
+}
+
 // An Encrypter is classified as a function that can take in a slice of bytes and return the encryption form of it
 type Encrypter func([]byte) []byte
 
 // A Decrypter is classified as a function that can take in a slice of bytes and return the decryption form of it
 type Decrypter func([]byte) []byte
 
-// A logger is classified as a function that can take in a string
+// A Handshaker is called on a successful client connection
+type Handshaker func(Connection)
+
+// A Logger is classified as a function that can take in a string
 type Logger func(string)
 
 type TCPServer struct {
-	port        int
-	wg          sync.WaitGroup
-	ln          net.Listener
 	connections map[int]net.Conn
-	countConn   int
-	log         Logger
-	errLog      Logger
 	isAlive     bool
+	countConn   int
+	port        int
+	handshaker  Handshaker
+	errLog      Logger
+	log         Logger
+	ln          net.Listener
+	wg          sync.WaitGroup
 }
 
-func NewServer(port int, log Logger) *TCPServer {
+func NewServer(port int, log Logger, handshaker Handshaker) *TCPServer {
 	return &TCPServer{
-		port:        port,
-		connections: make(map[int]net.Conn),
-		log:         log,
+		port:       port,
+		log:        log,
+		handshaker: handshaker,
 		errLog: func(msg string) {
 			log("[Error]" + msg)
 		},
+		connections: make(map[int]net.Conn),
 	}
 }
 
@@ -82,14 +92,26 @@ func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 		s.connections[s.countConn] = conn
 		connId := s.countConn
 		s.countConn += 1
+		s.log(fmt.Sprintf("New client connection made (ID: %d)", connId))
+
+		s.handshaker(conn)
+		s.log(fmt.Sprintf("Handshake sent to client (ID: %d)", connId))
 
 		// Handle each incoming packet
-		for err != nil {
-			var buf []byte
-			_, err = conn.Read(buf)
-			// Some handling here
-		}
+		for err == nil {
+			buf := make([]byte, 2048)
+			n, err := conn.Read(buf)
+			if err != nil {
+				s.errLog(fmt.Sprint("Could not read packet", err))
+				break
+			}
 
+			data := buf[:n]
+			buf = nil
+			// Some handling here
+			s.log(fmt.Sprintf("New packet: %X", data))
+		}
+		s.log("test")
 		// Packet handling loop is broken, clean up
 		conn.Close()
 		delete(s.connections, connId)
