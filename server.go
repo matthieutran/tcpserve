@@ -33,8 +33,9 @@ type TCPServer struct {
 
 func NewServer(port int, log Logger) *TCPServer {
 	return &TCPServer{
-		port: port,
-		log:  log,
+		port:        port,
+		connections: make(map[int]net.Conn),
+		log:         log,
 		errLog: func(msg string) {
 			log("[Error]" + msg)
 		},
