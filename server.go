@@ -1,4 +1,4 @@
-package servetcp
+package tcpserve
 
 import (
 	"fmt"
