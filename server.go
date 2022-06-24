@@ -3,6 +3,7 @@ package servetcp
 import (
 	"fmt"
 	"net"
+	"sync"
 )
 
 type IPacket interface {
@@ -21,11 +22,13 @@ type Logger func(string)
 
 type TCPServer struct {
 	port        int
+	wg          sync.WaitGroup
+	ln          net.Listener
+	connections map[int]net.Conn
+	countConn   int
 	log         Logger
 	errLog      Logger
-	ln          net.Listener
-	connections []net.Conn
-	countConn   int
+	isAlive     bool
 }
 
 func NewServer(port int, log Logger) *TCPServer {
@@ -39,18 +42,26 @@ func (s TCPServer) Port() int {
 	return s.port
 }
 
-func (s *TCPServer) Start() (err error) {
-	s.ln, err = net.Listen("tcp", ":8484")
+func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
+	defer wg.Done()
+
+	s.wg.Add(1)
+	s.ln, err = net.Listen("tcp", ":"+string(rune(s.port)))
 	if err != nil {
-		return err
+		return
 	}
+	s.isAlive = true
 	s.log(fmt.Sprintf("TCP Server started on port %d", s.port))
 
 	// Close listener at end of function
-	defer s.ln.Close()
+	defer func() {
+		s.ln.Close()
+		s.wg.Done()
+	}()
 
 	// Handle each new connection
-	for {
+	for s.isAlive {
+		s.wg.Add(1)
 		// Block until new connection and accept it
 		conn, err := s.ln.Accept()
 		if err != nil {
@@ -60,25 +71,35 @@ func (s *TCPServer) Start() (err error) {
 		}
 
 		// Add connection to the slice
-		s.connections = append(s.connections, conn)
+		s.connections[s.countConn] = conn
+		connId := s.countConn
 		s.countConn += 1
 
+		// Handle each incoming packet
 		for err != nil {
 			var buf []byte
 			_, err = conn.Read(buf)
 			// Some handling here
 		}
 
-		// Close loop if the handler loop breaks
+		// Packet handling loop is broken, clean up
 		conn.Close()
+		delete(s.connections, connId)
+		s.wg.Done()
 	}
+
+	return
 }
 
 func (s *TCPServer) Stop() (err error) {
 	// Close client connections
 	for _, connection := range s.connections {
 		connection.Close() // No error handling since we're trying to shut down anyway
+		s.wg.Done()
 	}
+
+	// Close listener loop
+	s.isAlive = false
 
 	// Close listener
 	return s.ln.Close()
