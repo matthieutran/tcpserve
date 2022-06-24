@@ -1,3 +1,3 @@
-module github.com/matthieutran/servetcp
+module github.com/matthieutran/tcpserve
 
 go 1.18

@@ -42,6 +42,8 @@ func (s TCPServer) Port() int {
 	return s.port
 }
 
+// Start serves the TCP server and listens for connections
+// A waitgroup needs have 1 for the TCP server and passed.
 func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 	// Ensure caller's waitgroup is closed
 	defer wg.Done()
