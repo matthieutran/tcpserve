@@ -17,10 +17,12 @@ type Connection interface {
 }
 
 // An Encrypter is classified as a function that can take in a slice of bytes and return the encryption form of it
-type Encrypter func([]byte) []byte
+type Encrypter func([]byte)
 
 // A Decrypter is classified as a function that can take in a slice of bytes and return the decryption form of it
-type Decrypter func([]byte) []byte
+type Decrypter func([]byte)
+
+type Handler func(Connection, []byte)
 
 // A Handshaker is called on a successful client connection
 type Handshaker func(Connection)
@@ -29,22 +31,28 @@ type Handshaker func(Connection)
 type Logger func(string)
 
 type TCPServer struct {
-	connections map[int]net.Conn
-	isAlive     bool
-	countConn   int
-	port        int
-	handshaker  Handshaker
-	errLog      Logger
-	log         Logger
-	ln          net.Listener
-	wg          sync.WaitGroup
+	connections   map[int]net.Conn
+	isAlive       bool
+	countConn     int
+	port          int
+	encrypt       Encrypter
+	decrypt       Decrypter
+	handlePacket  Handler
+	sendHandshake Handshaker
+	errLog        Logger
+	log           Logger
+	ln            net.Listener
+	wg            sync.WaitGroup
 }
 
-func NewServer(port int, log Logger, handshaker Handshaker) *TCPServer {
+func NewServer(port int, log Logger, encrypter Encrypter, decrypter Decrypter, handshaker Handshaker, handler Handler) *TCPServer {
 	return &TCPServer{
-		port:       port,
-		log:        log,
-		handshaker: handshaker,
+		port:          port,
+		log:           log,
+		encrypt:       encrypter,
+		decrypt:       decrypter,
+		handlePacket:  handler,
+		sendHandshake: handshaker,
 		errLog: func(msg string) {
 			log("[Error]" + msg)
 		},
@@ -94,7 +102,7 @@ func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 		s.countConn += 1
 		s.log(fmt.Sprintf("New client connection made (ID: %d)", connId))
 
-		s.handshaker(conn)
+		s.sendHandshake(conn)
 		s.log(fmt.Sprintf("Handshake sent to client (ID: %d)", connId))
 
 		// Handle each incoming packet
@@ -105,13 +113,11 @@ func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 				s.errLog(fmt.Sprint("Could not read packet", err))
 				break
 			}
-
-			data := buf[:n]
-			buf = nil
-			// Some handling here
-			s.log(fmt.Sprintf("New packet: %X", data))
+			data := buf[4:n]
+			s.decrypt(data)
+			s.handlePacket(conn, data)
 		}
-		s.log("test")
+
 		// Packet handling loop is broken, clean up
 		conn.Close()
 		delete(s.connections, connId)
