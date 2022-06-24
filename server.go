@@ -61,13 +61,16 @@ func (s *TCPServer) Start() (err error) {
 
 		// Add connection to the slice
 		s.connections = append(s.connections, conn)
+		s.countConn += 1
 
-		defer conn.Close()
-
-		for {
+		for err != nil {
+			var buf []byte
+			_, err = conn.Read(buf)
 			// Some handling here
 		}
 
+		// Close loop if the handler loop breaks
+		conn.Close()
 	}
 }
 
