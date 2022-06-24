@@ -35,6 +35,9 @@ func NewServer(port int, log Logger) *TCPServer {
 	return &TCPServer{
 		port: port,
 		log:  log,
+		errLog: func(msg string) {
+			log("[Error]" + msg)
+		},
 	}
 }
 
