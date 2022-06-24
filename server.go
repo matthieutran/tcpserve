@@ -43,6 +43,7 @@ func (s TCPServer) Port() int {
 }
 
 func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
+	// Ensure caller's waitgroup is closed
 	defer wg.Done()
 
 	s.wg.Add(1)
@@ -102,5 +103,10 @@ func (s *TCPServer) Stop() (err error) {
 	s.isAlive = false
 
 	// Close listener
-	return s.ln.Close()
+	err = s.ln.Close()
+
+	// Block until server has been gracefully shut down
+	s.wg.Wait()
+
+	return
 }
