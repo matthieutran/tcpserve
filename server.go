@@ -38,6 +38,7 @@ func NewServer(port int, log Logger) *TCPServer {
 	}
 }
 
+// Port gets the server's listening port
 func (s TCPServer) Port() int {
 	return s.port
 }
