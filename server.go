@@ -158,6 +158,13 @@ func (s *Server) handleConn(conn net.Conn) {
 	s.onConnected(conn)      // Send onConnected to the outside
 	s.log(fmt.Sprintf("New client connection made (ID: %d)", id))
 
+	// Ensure connection is gracefully shut down
+	defer func() {
+		conn.Close()              // Close connection
+		delete(s.connections, id) // Remove connection from connections map
+		s.wg.Done()               // Decrement wait group for listener
+	}()
+
 	// Handle each incoming packet
 	for {
 		// Read the packet without knowing its size
@@ -173,11 +180,6 @@ func (s *Server) handleConn(conn net.Conn) {
 		s.decrypt(data)        // Decrypt data if there is a decrypter
 		s.onPacket(conn, data) // Send event to the outside
 	}
-
-	// Packet handling loop is broken, clean up
-	conn.Close()              // Close connection
-	delete(s.connections, id) // Remove connection from connections map
-	s.wg.Done()               // Decrement wait group for listener
 }
 
 // WriteToId sends the byte slice to the specified connection `id`
