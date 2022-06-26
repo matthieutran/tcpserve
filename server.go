@@ -16,58 +16,108 @@ type Connection interface {
 	Write([]byte) (int, error)
 }
 
-// An Encrypter is classified as a function that can take in a slice of bytes and return the encryption form of it
-type Encrypter func([]byte)
+// An Codec is classified as a function that can take in a slice of bytes and return the manipulated form of it
+type Codec func([]byte)
 
-// A Decrypter is classified as a function that can take in a slice of bytes and return the decryption form of it
-type Decrypter func([]byte)
-
+// A handler is classified as a function will perform operations when an event occurs
 type Handler func(Connection, []byte)
-
-// A Handshaker is called on a successful client connection
-type Handshaker func(Connection)
 
 // A Logger is classified as a function that can take in a string
 type Logger func(string)
 
-type TCPServer struct {
-	connections   map[int]net.Conn
-	isAlive       bool
-	countConn     int
-	port          int
-	encrypt       Encrypter
-	decrypt       Decrypter
-	handlePacket  Handler
-	sendHandshake Handshaker
-	errLog        Logger
-	log           Logger
-	ln            net.Listener
-	wg            sync.WaitGroup
+type Server struct {
+	connections map[int]net.Conn
+	isAlive     bool
+	countConn   int
+	port        int
+	encrypt     Codec
+	decrypt     Codec
+	onPacket    Handler
+	onConnected Handler
+	errLog      Logger
+	log         Logger
+	ln          net.Listener
+	wg          sync.WaitGroup
 }
 
-func NewServer(port int, log Logger, encrypter Encrypter, decrypter Decrypter, handshaker Handshaker, handler Handler) *TCPServer {
-	return &TCPServer{
-		port:          port,
-		log:           log,
-		encrypt:       encrypter,
-		decrypt:       decrypter,
-		handlePacket:  handler,
-		sendHandshake: handshaker,
-		errLog: func(msg string) {
-			log("[Error]" + msg)
-		},
+type ServerOption func(*Server)
+
+func NewServer(options ...ServerOption) *Server {
+	const (
+		defaultPort = 8484
+	)
+
+	s := &Server{
+		port:        defaultPort,
+		isAlive:     false,
 		connections: make(map[int]net.Conn),
+	}
+
+	for _, option := range options {
+		option(s)
+	}
+
+	return s
+}
+
+// WithPort return a `ServerOption` which the Server constructor uses to modify its `port` member
+func WithPort(port int) ServerOption {
+	return func(s *Server) {
+		s.port = port
+	}
+}
+
+// WithLoggers returns a `ServerOption` which the Server constructor uses to modify its `logger` members
+//
+// If the `errLogger` parameter is left empty, then the errLogger function would use the `logger` parameter with [Error] prefixed.
+func WithLoggers(logger Logger, errLogger Logger) ServerOption {
+	return func(s *Server) {
+		s.log = logger
+
+		if errLogger == nil {
+			s.errLog = func(msg string) {
+				s.log(fmt.Sprint("[Error]", msg))
+			}
+		}
+	}
+}
+
+// WithEncrypter returns a `ServerOption` which the Server constructor uses to modify its `encrypt` member
+func WithEncrypter(encrypter Codec) ServerOption {
+	return func(s *Server) {
+		s.encrypt = encrypter
+	}
+}
+
+// WithDecrypter returns a `ServerOption` which the Server constructor uses to modify its `decrypt` member
+func WithDecrypter(decrypter Codec) ServerOption {
+	return func(s *Server) {
+		s.decrypt = decrypter
+	}
+}
+
+// WithOnPacket returns a `ServerOption` which the Server constructor uses to modify its `onPacket` member
+func WithOnPacket(onPacket Handler) ServerOption {
+	return func(s *Server) {
+		s.onPacket = onPacket
+	}
+}
+
+// WithOnConnected returns a `ServerOption` which the Server constructor uses to modify its `onConnected` member
+func WithOnConnected(onConnected Handler) ServerOption {
+	return func(s *Server) {
+		s.onConnected = onConnected
 	}
 }
 
 // Port gets the server's listening port
-func (s TCPServer) Port() int {
+func (s Server) Port() int {
 	return s.port
 }
 
 // Start serves the TCP server and listens for connections
 // A waitgroup needs have 1 for the TCP server and passed.
-func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
+func (s *Server) Start(wg sync.WaitGroup) (err error) {
 	// Ensure caller's waitgroup is closed
 	defer wg.Done()
 
@@ -102,7 +152,7 @@ func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 		s.countConn += 1
 		s.log(fmt.Sprintf("New client connection made (ID: %d)", connId))
 
-		s.sendHandshake(conn)
+		s.onConnected(conn)
 		s.log(fmt.Sprintf("Handshake sent to client (ID: %d)", connId))
 
 		// Handle each incoming packet
@@ -115,7 +165,7 @@ func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 			}
 			data := buf[4:n]
 			s.decrypt(data)
-			s.handlePacket(conn, data)
+			s.onPacket(conn, data)
 		}
 
 		// Packet handling loop is broken, clean up
@@ -127,7 +177,7 @@ func (s *TCPServer) Start(wg sync.WaitGroup) (err error) {
 	return
 }
 
-func (s *TCPServer) Stop() (err error) {
+func (s *Server) Stop() (err error) {
 	// Close client connections
 	for _, connection := range s.connections {
 		connection.Close() // No error handling since we're trying to shut down anyway
