@@ -180,6 +180,20 @@ func (s *Server) handleConn(conn net.Conn) {
 	s.wg.Done()               // Decrement wait group for listener
 }
 
+// WriteToId sends the byte slice to the specified connection `id`
+func (s *Server) WriteToId(message []byte, id int) {
+	if connection, ok := s.connections[id]; ok {
+		connection.Write(message)
+	}
+}
+
+// WriteToAll sends the byte slice to all open connections
+func (s *Server) WriteToAll(message []byte) {
+	for _, connection := range s.connections {
+		connection.Write(message)
+	}
+}
+
 func (s *Server) Stop() (err error) {
 	// Close client connections
 	for _, connection := range s.connections {
