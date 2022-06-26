@@ -27,10 +27,10 @@ type Server struct {
 	isAlive     bool
 	countConn   int
 	port        int
-	encrypt     Codec
-	decrypt     Codec
 	onPacket    func(Connection, []byte)
 	onConnected func(Connection)
+	encrypt     Codec
+	decrypt     Codec
 	errLog      Logger
 	log         Logger
 	ln          net.Listener
@@ -147,22 +147,23 @@ func (s *Server) Start(wg sync.WaitGroup) (err error) {
 		s.connections[s.countConn] = conn
 		connId := s.countConn
 		s.countConn += 1
-		s.log(fmt.Sprintf("New client connection made (ID: %d)", connId))
-
 		s.onConnected(conn)
-		s.log(fmt.Sprintf("Handshake sent to client (ID: %d)", connId))
+		s.log(fmt.Sprintf("New client connection made (ID: %d)", connId))
 
 		// Handle each incoming packet
 		for err == nil {
-			buf := make([]byte, 2048)
-			n, err := conn.Read(buf)
+			// Read the packet without knowing its size
+			buf := make([]byte, 2048) // We set the buffer to 2048 and shrink it later
+			n, err := conn.Read(buf)  // Attempt to read from the connection
 			if err != nil {
+				// If cannot read the packet, end the loop and close connection
 				s.errLog(fmt.Sprint("Could not read packet", err))
 				break
 			}
+
 			data := buf[4:n]
-			s.decrypt(data)
-			s.onPacket(conn, data)
+			s.decrypt(data)        // Decrypt data if there is a decrypter
+			s.onPacket(conn, data) // Send event to the outside
 		}
 
 		// Packet handling loop is broken, clean up
@@ -181,14 +182,9 @@ func (s *Server) Stop() (err error) {
 		s.wg.Done()
 	}
 
-	// Close listener loop
-	s.isAlive = false
-
-	// Close listener
-	err = s.ln.Close()
-
-	// Block until server has been gracefully shut down
-	s.wg.Wait()
+	s.isAlive = false  // Close listener loop
+	err = s.ln.Close() // Close listener
+	s.wg.Wait()        // Block until server has been gracefully shut down
 
 	return
 }
