@@ -6,11 +6,6 @@ import (
 	"sync"
 )
 
-type IPacket interface {
-	Bytes() []byte
-	Size() int
-}
-
 type Connection interface {
 	Read([]byte) (int, error)
 	Write([]byte) (int, error)
