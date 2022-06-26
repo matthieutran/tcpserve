@@ -128,11 +128,11 @@ func (s *Server) Start(wg sync.WaitGroup) (err error) {
 // handleConn listens for new packets
 func (s *Server) handleConn(conn net.Conn) {
 	// Add connection to the slice
-	id := s.sessionIndx // Set the current connection's ID
-	session := &Session{conn: conn, id: id}
-	s.sessions[id] = session // Add connection to the sessions map with key = id
-	s.sessionIndx += 1       // Increment connection count for next ID
-	s.onConnected(session)   // Send onConnected to the outside
+	id := s.sessionIndx             // Set the current connection's ID
+	session := NewSession(id, conn) // Create session
+	s.sessions[id] = session        // Add connection to the sessions map with key = id
+	s.sessionIndx += 1              // Increment connection count for next ID
+	s.onConnected(session)          // Send onConnected to the outside
 	s.log(fmt.Sprintf("New client connection made (ID: %d)", id))
 
 	// Ensure connection is gracefully shut down
