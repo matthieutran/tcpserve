@@ -4,7 +4,7 @@ import (
 	"net"
 )
 
-// An Codec is classified as a function that can take in a slice of bytes and return the manipulated form of it
+// A Codec is classified as a function that can take in a slice of bytes and return the manipulated form of it
 type Codec func([]byte)
 
 type Session struct {
