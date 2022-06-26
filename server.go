@@ -19,9 +19,6 @@ type Connection interface {
 // An Codec is classified as a function that can take in a slice of bytes and return the manipulated form of it
 type Codec func([]byte)
 
-// A handler is classified as a function will perform operations when an event occurs
-type Handler func(Connection, []byte)
-
 // A Logger is classified as a function that can take in a string
 type Logger func(string)
 
@@ -32,8 +29,8 @@ type Server struct {
 	port        int
 	encrypt     Codec
 	decrypt     Codec
-	onPacket    Handler
-	onConnected Handler
+	onPacket    func(Connection, []byte)
+	onConnected func(Connection)
 	errLog      Logger
 	log         Logger
 	ln          net.Listener
@@ -97,14 +94,14 @@ func WithDecrypter(decrypter Codec) ServerOption {
 }
 
 // WithOnPacket returns a `ServerOption` which the Server constructor uses to modify its `onPacket` member
-func WithOnPacket(onPacket Handler) ServerOption {
+func WithOnPacket(onPacket func(Connection, []byte)) ServerOption {
 	return func(s *Server) {
 		s.onPacket = onPacket
 	}
 }
 
 // WithOnConnected returns a `ServerOption` which the Server constructor uses to modify its `onConnected` member
-func WithOnConnected(onConnected Handler) ServerOption {
+func WithOnConnected(onConnected func(Connection)) ServerOption {
 	return func(s *Server) {
 		s.onConnected = onConnected
 	}
