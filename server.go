@@ -6,26 +6,16 @@ import (
 	"sync"
 )
 
-type Connection interface {
-	Read([]byte) (int, error)
-	Write([]byte) (int, error)
-}
-
-// An Codec is classified as a function that can take in a slice of bytes and return the manipulated form of it
-type Codec func([]byte)
-
 // A Logger is classified as a function that can take in a string
 type Logger func(string)
 
 type Server struct {
-	connections map[int]net.Conn
-	isAlive     bool
-	countConn   int
-	port        int
-	onPacket    func(Connection, []byte)
-	onConnected func(Connection)
-	encrypt     Codec
-	decrypt     Codec
+	sessions    map[int]*Session       // A map of current sessions
+	isAlive     bool                   // Server online
+	port        int                    // Port number that server will run on
+	sessionIndx int                    // Keeps track of what index sessions is on
+	onPacket    func(*Session, []byte) // Callback function when a new packet is received
+	onConnected func(*Session)         // Callback function when a new connection is made
 	errLog      Logger
 	log         Logger
 	ln          net.Listener
@@ -42,9 +32,9 @@ func NewServer(options ...ServerOption) *Server {
 
 	// Create Server object
 	s := &Server{
-		port:        defaultPort,
-		isAlive:     false,
-		connections: make(map[int]net.Conn),
+		port:     defaultPort,
+		isAlive:  false,
+		sessions: make(map[int]*Session),
 	}
 
 	// Call each option
@@ -77,29 +67,15 @@ func WithLoggers(logger Logger, errLogger Logger) ServerOption {
 	}
 }
 
-// WithEncrypter returns a `ServerOption` which the Server constructor uses to modify its `encrypt` member
-func WithEncrypter(encrypter Codec) ServerOption {
-	return func(s *Server) {
-		s.encrypt = encrypter
-	}
-}
-
-// WithDecrypter returns a `ServerOption` which the Server constructor uses to modify its `decrypt` member
-func WithDecrypter(decrypter Codec) ServerOption {
-	return func(s *Server) {
-		s.decrypt = decrypter
-	}
-}
-
 // WithOnPacket returns a `ServerOption` which the Server constructor uses to modify its `onPacket` member
-func WithOnPacket(onPacket func(Connection, []byte)) ServerOption {
+func WithOnPacket(onPacket func(*Session, []byte)) ServerOption {
 	return func(s *Server) {
 		s.onPacket = onPacket
 	}
 }
 
 // WithOnConnected returns a `ServerOption` which the Server constructor uses to modify its `onConnected` member
-func WithOnConnected(onConnected func(Connection)) ServerOption {
+func WithOnConnected(onConnected func(*Session)) ServerOption {
 	return func(s *Server) {
 		s.onConnected = onConnected
 	}
@@ -152,17 +128,18 @@ func (s *Server) Start(wg sync.WaitGroup) (err error) {
 // handleConn listens for new packets
 func (s *Server) handleConn(conn net.Conn) {
 	// Add connection to the slice
-	id := s.countConn        // Set the current connection's ID
-	s.connections[id] = conn // Add connection to the connections map with key = id
-	s.countConn += 1         // Increment connection count for next ID
-	s.onConnected(conn)      // Send onConnected to the outside
+	id := s.sessionIndx // Set the current connection's ID
+	session := &Session{conn: conn, id: id}
+	s.sessions[id] = session // Add connection to the sessions map with key = id
+	s.sessionIndx += 1       // Increment connection count for next ID
+	s.onConnected(session)   // Send onConnected to the outside
 	s.log(fmt.Sprintf("New client connection made (ID: %d)", id))
 
 	// Ensure connection is gracefully shut down
 	defer func() {
-		conn.Close()              // Close connection
-		delete(s.connections, id) // Remove connection from connections map
-		s.wg.Done()               // Decrement wait group for listener
+		conn.Close()           // Close connection
+		delete(s.sessions, id) // Remove connection from connections map
+		s.wg.Done()            // Decrement wait group for listener
 	}()
 
 	// Handle each incoming packet
@@ -176,30 +153,30 @@ func (s *Server) handleConn(conn net.Conn) {
 			break
 		}
 
-		data := buf[4:n]       // Make a new byte slice from buffer containing the correct size packet
-		s.decrypt(data)        // Decrypt data if there is a decrypter
-		s.onPacket(conn, data) // Send event to the outside
+		data := buf[4:n]          // Make a new byte slice from buffer containing the correct size packet
+		session.decrypt(data)     // Decrypt data if there is a decrypter
+		s.onPacket(session, data) // Send event to the outside
 	}
 }
 
 // WriteToId sends the byte slice to the specified connection `id`
 func (s *Server) WriteToId(message []byte, id int) {
-	if connection, ok := s.connections[id]; ok {
-		connection.Write(message)
+	if session, ok := s.sessions[id]; ok {
+		session.conn.Write(message)
 	}
 }
 
 // WriteToAll sends the byte slice to all open connections
 func (s *Server) WriteToAll(message []byte) {
-	for _, connection := range s.connections {
-		connection.Write(message)
+	for _, session := range s.sessions {
+		session.conn.Write(message)
 	}
 }
 
 func (s *Server) Stop() (err error) {
 	// Close client connections
-	for _, connection := range s.connections {
-		connection.Close() // No error handling since we're trying to shut down anyway
+	for _, connection := range s.sessions {
+		connection.conn.Close() // No error handling since we're trying to shut down anyway
 		s.wg.Done()
 	}
 
