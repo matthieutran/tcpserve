@@ -35,16 +35,19 @@ type Server struct {
 type ServerOption func(*Server)
 
 func NewServer(options ...ServerOption) *Server {
+	// Default options
 	const (
 		defaultPort = 8484
 	)
 
+	// Create Server object
 	s := &Server{
 		port:        defaultPort,
 		isAlive:     false,
 		connections: make(map[int]net.Conn),
 	}
 
+	// Call each option
 	for _, option := range options {
 		option(s)
 	}
@@ -140,36 +143,41 @@ func (s *Server) Start(wg sync.WaitGroup) (err error) {
 			continue     // Proceed to block until next client connection
 		}
 
-		// Add connection to the slice
-		connId := s.countConn        // Set the current connection's ID
-		s.connections[connId] = conn // Add connection to the connections map with key = id
-		s.countConn += 1             // Increment connection count for next ID
-		s.onConnected(conn)          // Send onConnected to the outside
-		s.log(fmt.Sprintf("New client connection made (ID: %d)", connId))
-
-		// Handle each incoming packet
-		for err == nil {
-			// Read the packet without knowing its size
-			buf := make([]byte, 2048) // We set the buffer to 2048 and shrink it later
-			n, err := conn.Read(buf)  // Attempt to read from the connection
-			if err != nil {
-				// If cannot read the packet, end the loop and close connection
-				s.errLog(fmt.Sprint("Could not read packet", err))
-				break
-			}
-
-			data := buf[4:n]       // Make a new byte slice from buffer containing the correct size packet
-			s.decrypt(data)        // Decrypt data if there is a decrypter
-			s.onPacket(conn, data) // Send event to the outside
-		}
-
-		// Packet handling loop is broken, clean up
-		conn.Close()                  // Close connection
-		delete(s.connections, connId) // Remove connection from connections map
-		s.wg.Done()                   // Decrement wait group for listener
+		go s.handleConn(conn)
 	}
 
 	return
+}
+
+// handleConn listens for new packets
+func (s *Server) handleConn(conn net.Conn) {
+	// Add connection to the slice
+	id := s.countConn        // Set the current connection's ID
+	s.connections[id] = conn // Add connection to the connections map with key = id
+	s.countConn += 1         // Increment connection count for next ID
+	s.onConnected(conn)      // Send onConnected to the outside
+	s.log(fmt.Sprintf("New client connection made (ID: %d)", id))
+
+	// Handle each incoming packet
+	for {
+		// Read the packet without knowing its size
+		buf := make([]byte, 2048) // We set the buffer to 2048 and shrink it later
+		n, err := conn.Read(buf)  // Attempt to read from the connection
+		if err != nil {
+			// If cannot read the packet, end the loop and close connection
+			s.errLog(fmt.Sprintf("Closing connection (ID: %d). Could not read packet: %s", id, err))
+			break
+		}
+
+		data := buf[4:n]       // Make a new byte slice from buffer containing the correct size packet
+		s.decrypt(data)        // Decrypt data if there is a decrypter
+		s.onPacket(conn, data) // Send event to the outside
+	}
+
+	// Packet handling loop is broken, clean up
+	conn.Close()              // Close connection
+	delete(s.connections, id) // Remove connection from connections map
+	s.wg.Done()               // Decrement wait group for listener
 }
 
 func (s *Server) Stop() (err error) {
