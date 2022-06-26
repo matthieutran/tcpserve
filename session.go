@@ -36,7 +36,15 @@ func (s *Session) SetDecrypter(decrypter Codec) {
 	s.decrypt = decrypter
 }
 
+// Encrypt and send a slice of bytes
 func (s *Session) Write(data []byte) (int, error) {
+	s.encrypt(data)
+
+	return s.conn.Write(data)
+}
+
+// Send a slice of bytes (UNENCRYPTED)
+func (s *Session) WriteRaw(data []byte) (int, error) {
 	return s.conn.Write(data)
 }
 
