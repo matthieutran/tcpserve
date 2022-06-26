@@ -110,39 +110,41 @@ func (s Server) Port() int {
 // Start serves the TCP server and listens for connections
 // A waitgroup needs have 1 for the TCP server and passed.
 func (s *Server) Start(wg sync.WaitGroup) (err error) {
-	// Ensure caller's waitgroup is closed
+	// Ensure caller's wait group is decremented when listener is closed
 	defer wg.Done()
 
-	s.wg.Add(1)
+	s.wg.Add(1) // Increment wait group for the listener
 	s.ln, err = net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
-		return
+		s.wg.Done() // Decrement wait group for the listener
+		return      // Return with error
 	}
+	// Listener server is alive
 	s.isAlive = true
 	s.log(fmt.Sprintf("TCP Server started on port %d", s.port))
 
-	// Close listener at end of function
+	// Ensure listener is closed at end of function
 	defer func() {
-		s.ln.Close()
-		s.wg.Done()
+		s.ln.Close() // Close listener server
+		s.wg.Done()  // Decrement wait group for listener
 	}()
 
 	// Handle each new connection
 	for s.isAlive {
-		s.wg.Add(1)
-		// Block until new connection and accept it
-		conn, err := s.ln.Accept()
+		s.wg.Add(1)                // Increment waitgroup for this connection
+		conn, err := s.ln.Accept() // Block until new connection and accept it
 		if err != nil {
-			conn.Close() // Close connection
 			s.errLog(fmt.Sprint("error accepting client connection:", err))
-			continue // Proceed to block until next client connection
+			conn.Close() // Close connection
+			s.wg.Done()  // Decrement wait group for connection
+			continue     // Proceed to block until next client connection
 		}
 
 		// Add connection to the slice
-		s.connections[s.countConn] = conn
-		connId := s.countConn
-		s.countConn += 1
-		s.onConnected(conn)
+		connId := s.countConn        // Set the current connection's ID
+		s.connections[connId] = conn // Add connection to the connections map with key = id
+		s.countConn += 1             // Increment connection count for next ID
+		s.onConnected(conn)          // Send onConnected to the outside
 		s.log(fmt.Sprintf("New client connection made (ID: %d)", connId))
 
 		// Handle each incoming packet
@@ -156,15 +158,15 @@ func (s *Server) Start(wg sync.WaitGroup) (err error) {
 				break
 			}
 
-			data := buf[4:n]
+			data := buf[4:n]       // Make a new byte slice from buffer containing the correct size packet
 			s.decrypt(data)        // Decrypt data if there is a decrypter
 			s.onPacket(conn, data) // Send event to the outside
 		}
 
 		// Packet handling loop is broken, clean up
-		conn.Close()
-		delete(s.connections, connId)
-		s.wg.Done()
+		conn.Close()                  // Close connection
+		delete(s.connections, connId) // Remove connection from connections map
+		s.wg.Done()                   // Decrement wait group for listener
 	}
 
 	return
