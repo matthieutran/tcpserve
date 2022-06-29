@@ -4,23 +4,26 @@ import (
 	"net"
 )
 
-// A Codec can encrypt and decrypt packets
-type Codec interface {
-	Encrypt([]byte) []byte
-	Decrypt([]byte) []byte
-}
+// A Codec performs operations on an input byte slice and returns the result
+type Codec func([]byte) []byte
 
 type Session struct {
-	id    int
-	conn  net.Conn
-	codec Codec
+	id      int
+	conn    net.Conn
+	encrypt Codec
+	decrypt Codec
 }
 
 type SessionOption func(*Session)
 
 func NewSession(options ...SessionOption) *Session {
-	// Create Server object
 	s := &Session{}
+	dummy := func(b []byte) []byte {
+		return b
+	}
+
+	s.encrypt = dummy
+	s.decrypt = dummy
 
 	// Call each option
 	for _, option := range options {
@@ -42,31 +45,33 @@ func WithConn(conn net.Conn) SessionOption {
 	}
 }
 
-func WithCodec(codec Codec) SessionOption {
+func WithEncrypter(encrypter Codec) SessionOption {
 	return func(s *Session) {
-		s.codec = codec
+		s.encrypt = encrypter
 	}
 }
 
-func (s *Session) SetCodec(codec Codec) {
-	s.codec = codec
+func WithDecrypter(decrypter Codec) SessionOption {
+	return func(s *Session) {
+		s.decrypt = decrypter
+	}
 }
 
 func (s *Session) Id() int {
 	return s.id
 }
 
-func (s *Session) Encrypt(d []byte) []byte {
-	return s.codec.Encrypt(d)
+func (s *Session) Encrypt(data []byte) []byte {
+	return s.encrypt(data)
 }
 
-func (s *Session) Decrypt(d []byte) []byte {
-	return s.codec.Decrypt(d)
+func (s *Session) Decrypt(data []byte) []byte {
+	return s.decrypt(data)
 }
 
 // Encrypt and send a slice of bytes
 func (s *Session) Write(data []byte) (int, error) {
-	res := s.codec.Encrypt(data)
+	res := s.Encrypt(data)
 
 	return s.conn.Write(res)
 }
