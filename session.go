@@ -48,8 +48,20 @@ func WithCodec(codec Codec) SessionOption {
 	}
 }
 
+func (s *Session) SetCodec(codec Codec) SessionOption {
+	s.codec = codec
+}
+
 func (s *Session) Id() int {
 	return s.id
+}
+
+func (s *Session) Encrypt(d []byte) []byte {
+	return s.codec.Encrypt(d)
+}
+
+func (s *Session) Decrypt(d []byte) []byte {
+	return s.codec.Decrypt(d)
 }
 
 // Encrypt and send a slice of bytes
