@@ -18,12 +18,16 @@ type Session struct {
 
 type SessionOption func(*Session)
 
-func NewSession(id int, conn net.Conn, codec Codec) *Session {
-	return &Session{
-		id:    id,
-		conn:  conn,
-		codec: codec,
+func NewSession(options ...SessionOption) *Session {
+	// Create Server object
+	s := &Session{}
+
+	// Call each option
+	for _, option := range options {
+		option(s)
 	}
+
+	return s
 }
 
 func WithId(id int) SessionOption {
