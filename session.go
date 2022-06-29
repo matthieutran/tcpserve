@@ -48,7 +48,7 @@ func WithCodec(codec Codec) SessionOption {
 	}
 }
 
-func (s *Session) SetCodec(codec Codec) SessionOption {
+func (s *Session) SetCodec(codec Codec) {
 	s.codec = codec
 }
 
