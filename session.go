@@ -16,6 +16,8 @@ type Session struct {
 	codec Codec
 }
 
+type SessionOption func(*Session)
+
 func NewSession(id int, conn net.Conn, codec Codec) *Session {
 	return &Session{
 		id:    id,
@@ -24,13 +26,26 @@ func NewSession(id int, conn net.Conn, codec Codec) *Session {
 	}
 }
 
-func (s *Session) Id() int {
-	return s.id
+func WithId(id int) SessionOption {
+	return func(s *Session) {
+		s.id = id
+	}
 }
 
-// SetCodec changes the session's codec
-func (s *Session) SetCodec(codec Codec) {
-	s.codec = codec
+func WithConn(conn net.Conn) SessionOption {
+	return func(s *Session) {
+		s.conn = conn
+	}
+}
+
+func WithCodec(codec Codec) SessionOption {
+	return func(s *Session) {
+		s.codec = codec
+	}
+}
+
+func (s *Session) Id() int {
+	return s.id
 }
 
 // Encrypt and send a slice of bytes
