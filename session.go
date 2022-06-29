@@ -57,6 +57,14 @@ func WithDecrypter(decrypter Codec) SessionOption {
 	}
 }
 
+func (s *Session) SetEncrypter(encrypter Codec) {
+	s.encrypt = encrypter
+}
+
+func (s *Session) SetDecrypter(decrypter Codec) {
+	s.decrypt = decrypter
+}
+
 func (s *Session) Id() int {
 	return s.id
 }

@@ -14,12 +14,14 @@ func main() {
 		log.Println(msg)
 	}
 
-	encrypt := func(b []byte) {
+	encrypt := func(b []byte) []byte {
 		// do something with bytes
+		return b
 	}
 
-	decrypt := func(b []byte) {
+	decrypt := func(b []byte) []byte {
 		// do something with bytes
+		return b
 	}
 
 	handshake := func(s *tcpserve.Session) {
