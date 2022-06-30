@@ -1,6 +1,7 @@
 package tcpserve
 
 import (
+	"io"
 	"net"
 )
 
@@ -12,6 +13,8 @@ type Session struct {
 	conn    net.Conn
 	encrypt Codec
 	decrypt Codec
+	io.Writer
+	io.Reader
 }
 
 type SessionOption func(*Session)
