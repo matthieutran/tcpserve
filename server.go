@@ -19,7 +19,7 @@ type Server struct {
 	errLog      Logger
 	log         Logger
 	ln          net.Listener
-	wg          sync.WaitGroup
+	wg          *sync.WaitGroup
 }
 
 type ServerOption func(*Server)

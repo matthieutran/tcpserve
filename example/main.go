@@ -42,7 +42,7 @@ func main() {
 
 	wg.Add(1)
 	server := tcpserve.NewServer(port, loggers, onConnected, onPacket)
-	server.Start(wg)
+	server.Start(&wg)
 
 	wg.Wait()
 }
