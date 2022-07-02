@@ -88,7 +88,7 @@ func (s Server) Port() int {
 
 // Start serves the TCP server and listens for connections
 // A waitgroup needs have 1 for the TCP server and passed.
-func (s *Server) Start(wg sync.WaitGroup) (err error) {
+func (s *Server) Start(wg *sync.WaitGroup) (err error) {
 	// Ensure caller's wait group is decremented when listener is closed
 	defer wg.Done()
 
